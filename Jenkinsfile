@@ -1,63 +1,48 @@
-//small change
-
-// Lab 08 — CI Pipeline Jenkinsfile
-// Deliverable written as required by the lab task sheet.
-// STATUS: BLOCKED — a running Jenkins instance with a Multibranch Pipeline job and
-// a GitHub webhook is required to execute and demonstrate automatic triggering.
-// The Jenkinsfile is syntactically complete and follows the lab spec.
-
+// Environment verification template — confirms the CI agent has Maven, a JDK, and
+// JUnit working together before any real application pipeline is written on top.
 pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "team-skeleton"
+        IMAGE_NAME = "env-check"
     }
 
     stages {
-
         stage('Checkout') {
             steps {
-                // Checks out the branch that triggered this build.
-                // In a Multibranch Pipeline this covers main, feature branches,
-                // and PRs automatically — no per-branch configuration needed.
                 checkout scm
             }
         }
 
-        stage('Build Image') {
+        stage('Build Verification Image') {
             steps {
-                // Builds the Docker image using the multi-stage Dockerfile from Lab 06.
-                // Tags with the Jenkins build number so every build produces a uniquely
-                // tagged image — avoids overwriting previous builds' artefacts.
+                // Building the image alone proves Maven/JDK/JUnit resolve and compile
+                // correctly, since the Dockerfile runs `mvn test` during the build.
                 sh "docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} ."
+            }
+        }
+
+        stage('Report Versions') {
+            steps {
+                // Re-run against the built image so the tool versions show up
+                // directly in this stage's console output.
+                sh "docker run --rm --entrypoint sh ${IMAGE_NAME}:${BUILD_NUMBER} -c 'java -version && mvn -version'"
             }
         }
 
         stage('Test') {
             steps {
-                // Runs the Maven test suite inside the build environment.
-                // -B (batch mode) suppresses interactive prompts so output is clean in logs.
-                sh "mvn -B test"
-            }
-            post {
-                always {
-                    // Publishes JUnit XML results to Jenkins regardless of pass/fail.
-                    // This gives a test-trend chart in the Jenkins UI and lets branch
-                    // protection rules check the test result as a status check.
-                    junit 'target/surefire-reports/*.xml'
-                }
+                sh "docker run --rm ${IMAGE_NAME}:${BUILD_NUMBER}"
             }
         }
     }
 
     post {
-        failure {
-            // Notifies the team on build failure. Replace with your notification
-            // mechanism (Slack, email, Teams) once Jenkins is configured.
-            echo "Build ${BUILD_NUMBER} failed — check console output."
-        }
         success {
-            echo "Build ${BUILD_NUMBER} passed."
+            echo "Environment check passed: Maven, JDK, and JUnit are installed and working."
+        }
+        failure {
+            echo "Environment check failed — see console output for the missing/broken tool."
         }
     }
 }
