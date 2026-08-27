@@ -1,3 +1,4 @@
+//testing
 // Environment verification template — confirms the CI agent has Maven, a JDK, and
 // JUnit working together before any real application pipeline is written on top.
 pipeline {
